@@ -41,6 +41,16 @@ const userSchema = new mongoose.Schema({
     default: 'ACTIVE'
   },
 
+  // CHAMPS DE VÉRIFICATION PAR EMAIL
+  verificationCode: {
+    type: String,
+    default: null
+  },
+  verificationCodeExpires: {
+    type: Date,
+    default: null
+  },
+
   // RÉFÉRENCES AUX PROFILS (une seule sera remplie selon le rôle)
   studentProfile: {
     type: mongoose.Schema.Types.ObjectId,
@@ -67,14 +77,14 @@ const userSchema = new mongoose.Schema({
 });
 
 // Hash password avant sauvegarde
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
 
 // Méthode pour comparer password
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 

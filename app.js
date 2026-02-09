@@ -31,13 +31,13 @@ mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
-.then(() => console.log('✅ MongoDB connecté'))
-.catch(err => console.error('❌ Erreur MongoDB:', err));
+  .then(() => console.log('✅ MongoDB connecté'))
+  .catch(err => console.error('❌ Erreur MongoDB:', err));
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date(),
     mongodb: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
   });
@@ -63,7 +63,7 @@ const server = new ApolloServer({
 
 async function startServer() {
   await server.start();
-  
+
   app.use(
     '/graphql',
     cors(),
@@ -76,8 +76,8 @@ async function startServer() {
     })
   );
 
-  const PORT = process.env.PORT || 4000;
-  
+  const PORT = process.env.PORT || 8000;
+
   app.listen(PORT, () => {
     console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
     console.log(`📊 GraphQL endpoint: http://localhost:${PORT}/graphql`);

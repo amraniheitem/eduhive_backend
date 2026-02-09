@@ -40,7 +40,7 @@ const typeDefs = gql`
     withdrawable: Float!
     bankInfo: BankInfo
     selectedSubjects: [Subject!]
-    ratingsStats: RatingsStats # ← AJOUTÉ
+    ratingsStats: RatingsStats
     createdAt: Date!
   }
 
@@ -88,9 +88,6 @@ const typeDefs = gql`
     totalSize: Int!
   }
 
-  # ========================================
-  # NOUVEAU : RATINGS STATS
-  # ========================================
   type RatingsStats {
     averageRating: Float!
     totalRatings: Int!
@@ -98,7 +95,7 @@ const typeDefs = gql`
   }
 
   type RatingDistribution {
-    one: Int! # Note: GraphQL n'accepte pas les noms de champs commençant par un chiffre
+    one: Int!
     two: Int!
     three: Int!
     four: Int!
@@ -147,7 +144,7 @@ const typeDefs = gql`
     videos: [Video!]
     pdfs: [PDF!]
     contentStats: ContentStats
-    ratingsStats: RatingsStats # ← AJOUTÉ
+    ratingsStats: RatingsStats
     createdAt: Date!
   }
 
@@ -266,6 +263,21 @@ const typeDefs = gql`
     ratings: [Rating!]!
   }
 
+  # ========================================
+  # NOUVEAUX TYPES POUR L'INSCRIPTION
+  # ========================================
+  type RegistrationStepResponse {
+    success: Boolean!
+    message: String!
+    userId: ID!
+    step: Int!
+  }
+
+  type MessageResponse {
+    success: Boolean!
+    message: String!
+  }
+
   enum RatingTargetType {
     VIDEO
     PDF
@@ -374,7 +386,49 @@ const typeDefs = gql`
   union ProfileUnion = Student | Teacher | Admin
 
   type Mutation {
-    # Auth
+    # ========================================
+    # INSCRIPTION EN 3 ÉTAPES
+    # ========================================
+    
+    # ÉTAPE 1/3: Informations personnelles Student
+    registerStudentStep1(
+      firstName: String!
+      lastName: String!
+      phone: String!
+      parentName: String!
+      educationLevel: EducationLevel!
+      currentYear: String
+    ): RegistrationStepResponse!
+    
+    # ÉTAPE 1/3: Informations personnelles Teacher
+    registerTeacherStep1(
+      firstName: String!
+      lastName: String!
+      phone: String!
+      subjects: [String!]
+      educationLevels: [EducationLevel!]
+    ): RegistrationStepResponse!
+    
+    # ÉTAPE 2/3: Création du compte (email + password)
+    registerStep2(
+      userId: ID!
+      email: String!
+      password: String!
+      confirmedPassword: String!
+    ): RegistrationStepResponse!
+    
+    # ÉTAPE 3/3: Vérification du code
+    verifyRegistrationCode(
+      userId: ID!
+      code: String!
+    ): AuthPayload!
+    
+    # Renvoyer le code de vérification
+    resendVerificationCode(userId: ID!): MessageResponse!
+
+    # ========================================
+    # Auth (ancienne méthode - à garder pour compatibilité)
+    # ========================================
     register(
       email: String!
       password: String!
@@ -489,9 +543,11 @@ const typeDefs = gql`
 
     # Withdrawal
     requestWithdrawal(amount: Float!): Transaction!
+    
     # Admin Actions
     toggleUserStatus(userId: ID!): User!
-        createAdminUser(
+    
+    createAdminUser(
       email: String!
       password: String!
       firstName: String!
@@ -501,8 +557,6 @@ const typeDefs = gql`
       permissions: [String!]
     ): AuthPayload!
   }
-
-
 `;
 
 module.exports = typeDefs;

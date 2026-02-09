@@ -25,6 +25,55 @@ const {
   isValidComment,
 } = require("../utils/validators");
 
+// Utilitaires pour l'envoi d'email (à créer)
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+
+// Configuration Nodemailer
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+// Générer code de vérification
+const generateVerificationCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Envoyer email de vérification
+const sendVerificationEmail = async (email, verificationCode, firstName) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: "Votre code de vérification EduHive",
+    text: `Votre code de vérification est : ${verificationCode}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Bonjour ${firstName},</h2>
+        <p>Votre code de vérification est :</p>
+        <h1 style="color: #4CAF50; font-size: 32px; letter-spacing: 5px; text-align: center;">
+          ${verificationCode}
+        </h1>
+        <p>Ce code expire dans 10 minutes.</p>
+        <p style="color: #666; font-size: 12px;">
+          Si vous n'avez pas demandé ce code, ignorez cet email.
+        </p>
+      </div>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Email envoyé avec succès à:", email);
+  } catch (error) {
+    console.error("Erreur lors de l'envoi de l'email:", error);
+    throw new Error(`Échec de l'envoi de l'email : ${error.message}`);
+  }
+};
+
 const resolvers = {
   Query: {
     // ========================================
@@ -134,6 +183,8 @@ const resolvers = {
       return await Admin.findById(id);
     },
 
+    // ... (toutes les autres queries restent identiques)
+    // Continuer avec subjects, mySubjects, myPurchasedSubjects, myProgress, etc.
     // ========================================
     // SUBJECTS
     // ========================================
@@ -212,11 +263,8 @@ const resolvers = {
           subject: subject._id,
         });
 
-        // Calculer progression globale
         const totalContent = subject.videos.length + subject.pdfs.length;
-        const completedVideos = videosProgress.filter(
-          (v) => v.completed,
-        ).length;
+        const completedVideos = videosProgress.filter((v) => v.completed).length;
         const completedPDFs = pdfsProgress.filter((p) => p.completed).length;
         const overallProgress =
           totalContent > 0
@@ -245,7 +293,6 @@ const resolvers = {
         throw new Error("Matière non trouvée");
       }
 
-      // Vérifier que l'étudiant a acheté ce subject
       if (!student.enrolledSubjects.includes(subjectId)) {
         throw new Error("Vous n'avez pas acheté cette matière");
       }
@@ -350,17 +397,17 @@ const resolvers = {
       requireAuth(context);
       const filter = recipientId
         ? {
-            $or: [
-              { sender: context.user._id, recipient: recipientId },
-              { sender: recipientId, recipient: context.user._id },
-            ],
-          }
+          $or: [
+            { sender: context.user._id, recipient: recipientId },
+            { sender: recipientId, recipient: context.user._id },
+          ],
+        }
         : {
-            $or: [
-              { sender: context.user._id },
-              { recipient: context.user._id },
-            ],
-          };
+          $or: [
+            { sender: context.user._id },
+            { recipient: context.user._id },
+          ],
+        };
 
       return await Message.find(filter)
         .populate("sender recipient subject")
@@ -426,7 +473,260 @@ const resolvers = {
 
   Mutation: {
     // ========================================
-    // AUTH
+    // INSCRIPTION EN 3 ÉTAPES - STUDENT
+    // ========================================
+    registerStudentStep1: async (_, args) => {
+      try {
+        const { firstName, lastName, phone, parentName, educationLevel, currentYear } = args;
+
+        // Créer un User partiel (1/3)
+        const user = await User.create({
+          firstName,
+          lastName,
+          phone,
+          role: 'STUDENT',
+          email: `temp_${Date.now()}@temp.com`,
+          password: `temp_${Date.now()}`,
+          status: 'INACTIVE',
+        });
+
+        // Créer le profil Student
+        const student = await Student.create({
+          userId: user._id,
+          parentName,
+          educationLevel,
+          currentYear: currentYear || '',
+          credit: 100,
+          enrolledSubjects: []
+        });
+
+        // Lier le profil au user
+        user.studentProfile = student._id;
+        await user.save();
+
+        return {
+          success: true,
+          message: "Informations personnelles enregistrées (1/3)",
+          userId: user._id.toString(),
+          step: 1
+        };
+      } catch (error) {
+        console.error("Erreur registerStudentStep1:", error);
+        throw new Error(`Erreur lors de l'enregistrement: ${error.message}`);
+      }
+    },
+
+    // ========================================
+    // INSCRIPTION EN 3 ÉTAPES - TEACHER
+    // ========================================
+    registerTeacherStep1: async (_, args) => {
+      try {
+        const { firstName, lastName, phone, subjects, educationLevels } = args;
+
+        // Créer un User partiel (1/3)
+        const user = await User.create({
+          firstName,
+          lastName,
+          phone,
+          role: 'TEACHER',
+          email: `temp_${Date.now()}@temp.com`,
+          password: `temp_${Date.now()}`,
+          status: 'INACTIVE',
+        });
+
+        // Créer le profil Teacher
+        const teacher = await Teacher.create({
+          userId: user._id,
+          subjects: subjects || [],
+          educationLevels: educationLevels || [],
+          selectedSubjects: [],
+          credit: 0,
+          totalEarnings: 0,
+          withdrawable: 0
+        });
+
+        // Lier le profil au user
+        user.teacherProfile = teacher._id;
+        await user.save();
+
+        return {
+          success: true,
+          message: "Informations personnelles enregistrées (1/3)",
+          userId: user._id.toString(),
+          step: 1
+        };
+      } catch (error) {
+        console.error("Erreur registerTeacherStep1:", error);
+        throw new Error(`Erreur lors de l'enregistrement: ${error.message}`);
+      }
+    },
+
+    // ========================================
+    // ÉTAPE 2/3: CRÉATION DU COMPTE
+    // ========================================
+    registerStep2: async (_, args) => {
+      try {
+        const { userId, email, password, confirmedPassword } = args;
+
+        // Vérifier que l'utilisateur existe
+        const user = await User.findById(userId);
+        if (!user) {
+          throw new Error("Utilisateur non trouvé");
+        }
+
+        // Vérifier si l'email est déjà utilisé (sauf email temporaire)
+        if (!email.includes('@temp.com')) {
+          const existingUser = await User.findOne({
+            email,
+            _id: { $ne: userId }
+          });
+          if (existingUser) {
+            throw new Error("Cet email est déjà utilisé");
+          }
+        }
+
+        // Validation
+        if (!isValidEmail(email)) {
+          throw new Error("Email invalide");
+        }
+
+        if (password !== confirmedPassword) {
+          throw new Error("Les mots de passe ne correspondent pas");
+        }
+
+        if (!isValidPassword(password)) {
+          throw new Error("Le mot de passe doit contenir au moins 6 caractères");
+        }
+
+        // Générer le code de vérification
+        const verificationCode = generateVerificationCode();
+        const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        // Mettre à jour le User (2/3)
+        user.email = email;
+        user.password = password; // Sera hashé automatiquement par le pre-save hook
+        user.verificationCode = verificationCode;
+        user.verificationCodeExpires = verificationCodeExpires;
+        await user.save();
+
+        // Envoyer l'email de vérification
+        await sendVerificationEmail(email, verificationCode, user.firstName);
+
+        return {
+          success: true,
+          message: "Compte créé, vérifiez votre email pour confirmer (2/3)",
+          userId: user._id.toString(),
+          step: 2
+        };
+      } catch (error) {
+        console.error("Erreur registerStep2:", error);
+        throw new Error(error.message);
+      }
+    },
+
+    // ========================================
+    // ÉTAPE 3/3: VÉRIFICATION DU CODE
+    // ========================================
+    verifyRegistrationCode: async (_, args) => {
+      try {
+        const { userId, code } = args;
+
+        // Trouver l'utilisateur
+        const user = await User.findById(userId)
+          .populate('studentProfile')
+          .populate('teacherProfile');
+
+        if (!user) {
+          throw new Error("Utilisateur non trouvé");
+        }
+
+        // Vérifier le code
+        if (!user.verificationCode) {
+          throw new Error("Aucun code à vérifier, veuillez recommencer l'inscription");
+        }
+
+        if (user.verificationCode !== code) {
+          // Supprimer le user et le profil en cas d'échec
+          if (user.studentProfile) {
+            await Student.findByIdAndDelete(user.studentProfile);
+          }
+          if (user.teacherProfile) {
+            await Teacher.findByIdAndDelete(user.teacherProfile);
+          }
+          await User.findByIdAndDelete(userId);
+          throw new Error("Code incorrect, compte supprimé");
+        }
+
+        // Vérifier l'expiration
+        if (user.verificationCodeExpires < Date.now()) {
+          // Supprimer le user et le profil en cas d'expiration
+          if (user.studentProfile) {
+            await Student.findByIdAndDelete(user.studentProfile);
+          }
+          if (user.teacherProfile) {
+            await Teacher.findByIdAndDelete(user.teacherProfile);
+          }
+          await User.findByIdAndDelete(userId);
+          throw new Error("Code expiré, compte supprimé");
+        }
+
+        // Activer le compte (3/3) ✅
+        user.status = 'ACTIVE';
+        user.verificationCode = null;
+        user.verificationCodeExpires = null;
+        await user.save();
+
+        // Générer le token
+        const token = generateToken(user._id);
+
+        return {
+          token,
+          user
+        };
+      } catch (error) {
+        console.error("Erreur verifyRegistrationCode:", error);
+        throw new Error(error.message);
+      }
+    },
+
+    // ========================================
+    // BONUS: RENVOYER LE CODE
+    // ========================================
+    resendVerificationCode: async (_, { userId }) => {
+      try {
+        const user = await User.findById(userId);
+
+        if (!user) {
+          throw new Error("Utilisateur non trouvé");
+        }
+
+        if (!user.email || user.email.includes('@temp.com')) {
+          throw new Error("Email invalide");
+        }
+
+        // Générer un nouveau code
+        const verificationCode = generateVerificationCode();
+        const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+        user.verificationCode = verificationCode;
+        user.verificationCodeExpires = verificationCodeExpires;
+        await user.save();
+
+        // Renvoyer l'email
+        await sendVerificationEmail(user.email, verificationCode, user.firstName);
+
+        return {
+          success: true,
+          message: "Code de vérification renvoyé"
+        };
+      } catch (error) {
+        console.error("Erreur resendVerificationCode:", error);
+        throw new Error(error.message);
+      }
+    },
+
+    // ========================================
+    // AUTH (ancienne méthode - à garder)
     // ========================================
     register: async (_, args) => {
       const { email, password, firstName, lastName, phone, role } = args;
@@ -1085,7 +1385,6 @@ const resolvers = {
         comment,
       });
 
-      // Mettre à jour les stats du subject
       const allRatings = await Rating.find({
         subject: subjectId,
         targetType: "SUBJECT",
@@ -1155,7 +1454,6 @@ const resolvers = {
         comment,
       });
 
-      // Mettre à jour stats teacher
       const allRatings = await Rating.find({
         teacher: teacherId,
         targetType: "TEACHER",
@@ -1311,7 +1609,6 @@ const resolvers = {
         throw new Error("Cet email est déjà utilisé");
       }
 
-      // Créer l'utilisateur ADMIN
       const user = await User.create({
         email,
         password,
@@ -1322,7 +1619,6 @@ const resolvers = {
         status: "ACTIVE",
       });
 
-      // Créer le profil admin automatiquement
       const admin = await Admin.create({
         userId: user._id,
         department: department || "GENERAL",
@@ -1539,4 +1835,4 @@ const resolvers = {
   },
 };
 
-module.exports = resolvers;
+module.exports = resolvers;  
