@@ -3,11 +3,14 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
+    family: 4, // Force IPv4
 });
 
 const generateVerificationCode = () => {
@@ -37,11 +40,25 @@ const sendVerificationEmail = async (email, verificationCode, firstName) => {
 
     try {
         await transporter.sendMail(mailOptions);
-        console.log("Email envoyé avec succès à:", email);
+        console.log("✅ Email envoyé avec succès à:", email);
     } catch (error) {
-        console.error("Erreur lors de l'envoi de l'email:", error);
+        console.error("❌ Erreur lors de l'envoi de l'email:", error);
         throw new Error(`Échec de l'envoi de l'email : ${error.message}`);
     }
 };
 
-module.exports = { sendVerificationEmail, generateVerificationCode };
+// Test de connexion SMTP (optionnel, à supprimer après test)
+const testEmailConnection = async () => {
+    try {
+        await transporter.verify();
+        console.log("✅ Serveur SMTP prêt à envoyer des emails");
+    } catch (error) {
+        console.error("❌ Erreur de connexion SMTP:", error);
+    }
+};
+
+module.exports = { 
+    sendVerificationEmail, 
+    generateVerificationCode,
+    testEmailConnection 
+};

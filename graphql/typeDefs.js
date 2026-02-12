@@ -11,6 +11,7 @@ const typeDefs = gql`
     phone: String!
     role: Role!
     status: Status!
+    verified: Boolean!
     studentProfile: Student
     teacherProfile: Teacher
     adminProfile: Admin

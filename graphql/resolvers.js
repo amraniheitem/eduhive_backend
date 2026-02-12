@@ -26,53 +26,13 @@ const {
 } = require("../utils/validators");
 
 // Utilitaires pour l'envoi d'email (à créer)
+
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 
-// Configuration Nodemailer
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-// Générer code de vérification
-const generateVerificationCode = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
-
-// Envoyer email de vérification
-const sendVerificationEmail = async (email, verificationCode, firstName) => {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: "Votre code de vérification EduHive",
-    text: `Votre code de vérification est : ${verificationCode}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Bonjour ${firstName},</h2>
-        <p>Votre code de vérification est :</p>
-        <h1 style="color: #4CAF50; font-size: 32px; letter-spacing: 5px; text-align: center;">
-          ${verificationCode}
-        </h1>
-        <p>Ce code expire dans 10 minutes.</p>
-        <p style="color: #666; font-size: 12px;">
-          Si vous n'avez pas demandé ce code, ignorez cet email.
-        </p>
-      </div>
-    `,
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log("Email envoyé avec succès à:", email);
-  } catch (error) {
-    console.error("Erreur lors de l'envoi de l'email:", error);
-    throw new Error(`Échec de l'envoi de l'email : ${error.message}`);
-  }
-};
+const { 
+  sendVerificationEmail, 
+  generateVerificationCode 
+} = require('../utils/email');
 
 const resolvers = {
   Query: {
@@ -624,71 +584,71 @@ const resolvers = {
       }
     },
 
-    // ========================================
-    // ÉTAPE 3/3: VÉRIFICATION DU CODE
-    // ========================================
-    verifyRegistrationCode: async (_, args) => {
-      try {
-        const { userId, code } = args;
+// ========================================
+// ÉTAPE 3/3: VÉRIFICATION DU CODE
+// ========================================
+verifyRegistrationCode: async (_, args) => {
+  try {
+    const { userId, code } = args;
 
-        // Trouver l'utilisateur
-        const user = await User.findById(userId)
-          .populate('studentProfile')
-          .populate('teacherProfile');
+    // Trouver l'utilisateur
+    const user = await User.findById(userId)
+      .populate('studentProfile')
+      .populate('teacherProfile');
 
-        if (!user) {
-          throw new Error("Utilisateur non trouvé");
-        }
+    if (!user) {
+      throw new Error("Utilisateur non trouvé");
+    }
 
-        // Vérifier le code
-        if (!user.verificationCode) {
-          throw new Error("Aucun code à vérifier, veuillez recommencer l'inscription");
-        }
+    // Vérifier le code
+    if (!user.verificationCode) {
+      throw new Error("Aucun code à vérifier, veuillez recommencer l'inscription");
+    }
 
-        if (user.verificationCode !== code) {
-          // Supprimer le user et le profil en cas d'échec
-          if (user.studentProfile) {
-            await Student.findByIdAndDelete(user.studentProfile);
-          }
-          if (user.teacherProfile) {
-            await Teacher.findByIdAndDelete(user.teacherProfile);
-          }
-          await User.findByIdAndDelete(userId);
-          throw new Error("Code incorrect, compte supprimé");
-        }
-
-        // Vérifier l'expiration
-        if (user.verificationCodeExpires < Date.now()) {
-          // Supprimer le user et le profil en cas d'expiration
-          if (user.studentProfile) {
-            await Student.findByIdAndDelete(user.studentProfile);
-          }
-          if (user.teacherProfile) {
-            await Teacher.findByIdAndDelete(user.teacherProfile);
-          }
-          await User.findByIdAndDelete(userId);
-          throw new Error("Code expiré, compte supprimé");
-        }
-
-        // Activer le compte (3/3) ✅
-        user.status = 'ACTIVE';
-        user.verificationCode = null;
-        user.verificationCodeExpires = null;
-        await user.save();
-
-        // Générer le token
-        const token = generateToken(user._id);
-
-        return {
-          token,
-          user
-        };
-      } catch (error) {
-        console.error("Erreur verifyRegistrationCode:", error);
-        throw new Error(error.message);
+    if (user.verificationCode !== code) {
+      // Supprimer le user et le profil en cas d'échec
+      if (user.studentProfile) {
+        await Student.findByIdAndDelete(user.studentProfile);
       }
-    },
+      if (user.teacherProfile) {
+        await Teacher.findByIdAndDelete(user.teacherProfile);
+      }
+      await User.findByIdAndDelete(userId);
+      throw new Error("Code incorrect, compte supprimé");
+    }
 
+    // Vérifier l'expiration
+    if (user.verificationCodeExpires < Date.now()) {
+      // Supprimer le user et le profil en cas d'expiration
+      if (user.studentProfile) {
+        await Student.findByIdAndDelete(user.studentProfile);
+      }
+      if (user.teacherProfile) {
+        await Teacher.findByIdAndDelete(user.teacherProfile);
+      }
+      await User.findByIdAndDelete(userId);
+      throw new Error("Code expiré, compte supprimé");
+    }
+
+    // ✅ MODIFICATION ICI: On change seulement verified, PAS status
+    // status reste INACTIVE par défaut
+    user.verified = true;
+    user.verificationCode = null;
+    user.verificationCodeExpires = null;
+    await user.save();
+
+    // Générer le token
+    const token = generateToken(user._id);
+
+    return {
+      token,
+      user
+    };
+  } catch (error) {
+    console.error("Erreur verifyRegistrationCode:", error);
+    throw new Error(error.message);
+  }
+},
     // ========================================
     // BONUS: RENVOYER LE CODE
     // ========================================

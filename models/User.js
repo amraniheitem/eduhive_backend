@@ -38,8 +38,13 @@ const userSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['ACTIVE', 'INACTIVE'],
-    default: 'ACTIVE'
+    default: 'INACTIVE'
   },
+  verified: {
+    type: Boolean,
+    default: false
+  },
+
 
   // CHAMPS DE VÉRIFICATION PAR EMAIL
   verificationCode: {
