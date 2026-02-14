@@ -29,10 +29,12 @@ const {
 
 const crypto = require('crypto');
 
-const { 
-  sendVerificationEmail, 
-  generateVerificationCode 
+const {
+  sendVerificationEmail,
+  generateVerificationCode
 } = require('../utils/email');
+
+const dashboardResolvers = require('./dashboardResolvers');
 
 const resolvers = {
   Query: {
@@ -429,6 +431,11 @@ const resolvers = {
 
       return earnings[0]?.total || 0;
     },
+
+    // ========================================
+    // DASHBOARD ANALYTICS
+    // ========================================
+    ...dashboardResolvers.Query,
   },
 
   Mutation: {
@@ -584,71 +591,71 @@ const resolvers = {
       }
     },
 
-// ========================================
-// ÉTAPE 3/3: VÉRIFICATION DU CODE
-// ========================================
-verifyRegistrationCode: async (_, args) => {
-  try {
-    const { userId, code } = args;
+    // ========================================
+    // ÉTAPE 3/3: VÉRIFICATION DU CODE
+    // ========================================
+    verifyRegistrationCode: async (_, args) => {
+      try {
+        const { userId, code } = args;
 
-    // Trouver l'utilisateur
-    const user = await User.findById(userId)
-      .populate('studentProfile')
-      .populate('teacherProfile');
+        // Trouver l'utilisateur
+        const user = await User.findById(userId)
+          .populate('studentProfile')
+          .populate('teacherProfile');
 
-    if (!user) {
-      throw new Error("Utilisateur non trouvé");
-    }
+        if (!user) {
+          throw new Error("Utilisateur non trouvé");
+        }
 
-    // Vérifier le code
-    if (!user.verificationCode) {
-      throw new Error("Aucun code à vérifier, veuillez recommencer l'inscription");
-    }
+        // Vérifier le code
+        if (!user.verificationCode) {
+          throw new Error("Aucun code à vérifier, veuillez recommencer l'inscription");
+        }
 
-    if (user.verificationCode !== code) {
-      // Supprimer le user et le profil en cas d'échec
-      if (user.studentProfile) {
-        await Student.findByIdAndDelete(user.studentProfile);
+        if (user.verificationCode !== code) {
+          // Supprimer le user et le profil en cas d'échec
+          if (user.studentProfile) {
+            await Student.findByIdAndDelete(user.studentProfile);
+          }
+          if (user.teacherProfile) {
+            await Teacher.findByIdAndDelete(user.teacherProfile);
+          }
+          await User.findByIdAndDelete(userId);
+          throw new Error("Code incorrect, compte supprimé");
+        }
+
+        // Vérifier l'expiration
+        if (user.verificationCodeExpires < Date.now()) {
+          // Supprimer le user et le profil en cas d'expiration
+          if (user.studentProfile) {
+            await Student.findByIdAndDelete(user.studentProfile);
+          }
+          if (user.teacherProfile) {
+            await Teacher.findByIdAndDelete(user.teacherProfile);
+          }
+          await User.findByIdAndDelete(userId);
+          throw new Error("Code expiré, compte supprimé");
+        }
+
+        // ✅ MODIFICATION ICI: On change seulement verified, PAS status
+        // status reste INACTIVE par défaut
+        user.verified = true;
+        user.verificationCode = null;
+        user.verificationCodeExpires = null;
+        await user.save();
+
+        // Générer le token
+        const token = generateToken(user._id);
+
+        return {
+          token,
+          user
+        };
+      } catch (error) {
+        console.error("Erreur verifyRegistrationCode:", error);
+        throw new Error(error.message);
       }
-      if (user.teacherProfile) {
-        await Teacher.findByIdAndDelete(user.teacherProfile);
-      }
-      await User.findByIdAndDelete(userId);
-      throw new Error("Code incorrect, compte supprimé");
-    }
-
-    // Vérifier l'expiration
-    if (user.verificationCodeExpires < Date.now()) {
-      // Supprimer le user et le profil en cas d'expiration
-      if (user.studentProfile) {
-        await Student.findByIdAndDelete(user.studentProfile);
-      }
-      if (user.teacherProfile) {
-        await Teacher.findByIdAndDelete(user.teacherProfile);
-      }
-      await User.findByIdAndDelete(userId);
-      throw new Error("Code expiré, compte supprimé");
-    }
-
-    // ✅ MODIFICATION ICI: On change seulement verified, PAS status
-    // status reste INACTIVE par défaut
-    user.verified = true;
-    user.verificationCode = null;
-    user.verificationCodeExpires = null;
-    await user.save();
-
-    // Générer le token
-    const token = generateToken(user._id);
-
-    return {
-      token,
-      user
-    };
-  } catch (error) {
-    console.error("Erreur verifyRegistrationCode:", error);
-    throw new Error(error.message);
-  }
-},
+    },
     // ========================================
     // BONUS: RENVOYER LE CODE
     // ========================================

@@ -334,6 +334,127 @@ const typeDefs = gql`
     CANCELLED
   }
 
+  # ========================================
+  # NOUVEAUX TYPES POUR DASHBOARD ANALYTICS
+  # ========================================
+
+  # KPIs Principaux
+  type DashboardKPIs {
+    totalEnrollments: KPIMetric!
+    retentionRate: KPIMetric!
+    totalRevenue: KPIMetric!
+    studentSatisfaction: KPIMetric!
+  }
+
+  type KPIMetric {
+    value: String!           # Valeur formatée (ex: "12,847" ou "92.4%")
+    numericValue: Float!     # Valeur numérique brute
+    change: Float!           # Pourcentage ou valeur absolue de changement
+    changeType: ChangeType!  # Type de changement
+    trend: TrendInfo!        # Info sur la tendance
+  }
+
+  type TrendInfo {
+    direction: TrendDirection!
+    description: String!     # Ex: "+1,054 ce mois"
+  }
+
+  enum TrendDirection {
+    UP
+    DOWN
+    STABLE
+  }
+
+  enum ChangeType {
+    POSITIVE
+    NEGATIVE
+    NEUTRAL
+  }
+
+  # Tendances mensuelles
+  type MonthlyTrend {
+    month: String!           # "Jan", "Fév", etc.
+    year: Int!
+    enrollment: Int!         # Nouveaux inscrits
+    completion: Float!       # % moyen de complétion
+    revenue: Float!          # Revenus en K€
+  }
+
+  # Top cours
+  type TopCourse {
+    id: ID!
+    name: String!
+    studentsCount: Int!
+    averageRating: Float!
+    status: PerformanceStatus!
+    revenue: Float!
+  }
+
+  enum PerformanceStatus {
+    HIGH
+    MEDIUM
+    LOW
+  }
+
+  # Étudiants à risque
+  type AtRiskCourse {
+    subjectId: ID!
+    subjectName: String!
+    studentsAtRisk: Int!
+    severity: RiskSeverity!
+  }
+
+  enum RiskSeverity {
+    HIGH
+    MEDIUM
+    LOW
+  }
+
+  # Performance par département
+  type DepartmentPerformance {
+    category: String!        # Nom du département
+    icon: String!            # Nom de l'icône
+    students: Int!
+    retention: Float!        # Pourcentage
+    satisfaction: Float!     # Pourcentage
+    revenue: Float!
+    details: DepartmentDetails!
+  }
+
+  type DepartmentDetails {
+    activeCourses: Int!
+    teachers: Int!
+    successRate: Float!      # Pourcentage
+  }
+
+  # Activité en temps réel
+  type ActivityEvent {
+    id: ID!
+    type: ActivityType!
+    description: String!
+    timestamp: Date!
+    user: User
+    subject: Subject
+    metadata: JSON
+  }
+
+  scalar JSON
+
+  enum ActivityType {
+    ENROLLMENT
+    COMPLETION
+    PAYMENT
+    WITHDRAWAL
+    SUBJECT_CREATED
+    RATING_SUBMITTED
+  }
+
+  # Input pour filtrer par date
+  input DateRangeInput {
+    startDate: Date
+    endDate: Date
+  }
+
   type Query {
     # Auth
     me: User
@@ -382,6 +503,25 @@ const typeDefs = gql`
     subjectRatings(subjectId: ID!): [Rating!]!
     teacherRatings(teacherId: ID!): [Rating!]!
     myRatings: [Rating!]!
+    
+    # ========================================
+    # NOUVELLES QUERIES DASHBOARD
+    # ========================================
+    # KPIs Dashboard
+    dashboardKPIs(dateRange: DateRangeInput): DashboardKPIs!
+    
+    # Tendances
+    monthlyTrends(months: Int): [MonthlyTrend!]!
+    
+    # Top & Bottom
+    topPerformingCourses(limit: Int): [TopCourse!]!
+    atRiskStudents(limit: Int): [AtRiskCourse!]!
+    
+    # Départements
+    departmentPerformance: [DepartmentPerformance!]!
+    
+    # Activité
+    recentActivity(limit: Int): [ActivityEvent!]!
   }
 
   union ProfileUnion = Student | Teacher | Admin
