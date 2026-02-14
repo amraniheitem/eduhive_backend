@@ -455,6 +455,93 @@ const typeDefs = gql`
     endDate: Date
   }
 
+  # ========================================
+  # NOUVEAUX TYPES POUR STUDENT ANALYTICS
+  # ========================================
+
+  # KPIs Étudiants
+  type StudentAnalyticsKPIs {
+    activeStudents: StudentKPIMetric!
+    successRate: StudentKPIMetric!
+    retentionRate: StudentKPIMetric!
+    atRiskCount: StudentKPIMetric!
+    averageGrade: StudentKPIMetric!
+    attendanceRate: StudentKPIMetric!
+  }
+
+  type StudentKPIMetric {
+    value: String!
+    numericValue: Float!
+    change: Float!
+    changeType: ChangeType!
+    description: String!
+  }
+
+  # Funnel de progression
+  type ProgressionFunnelData {
+    stage: String!
+    count: Int!
+    percentage: Float!
+    dropoffRate: Float!
+  }
+
+  # Heatmap d'engagement
+  type EngagementHeatmapData {
+    dayOfWeek: Int!
+    hour: Int!
+    activityCount: Int!
+    intensity: String!
+  }
+
+  # Étudiant à risque (individuel)
+  type AtRiskStudentDetail {
+    studentId: ID!
+    firstName: String!
+    lastName: String!
+    email: String!
+    enrolledCourses: Int!
+    averageProgress: Float!
+    lastActivity: Date
+    riskLevel: RiskLevel!
+    riskFactors: [String!]!
+  }
+
+  enum RiskLevel {
+    CRITICAL
+    HIGH
+    MEDIUM
+    LOW
+  }
+
+  # Performance d'un étudiant
+  type StudentPerformance {
+    studentId: ID!
+    firstName: String!
+    lastName: String!
+    email: String!
+    educationLevel: EducationLevel!
+    enrolledCourses: Int!
+    completedCourses: Int!
+    averageProgress: Float!
+    averageGrade: Float!
+    lastActivity: Date
+    status: Status!
+  }
+
+  input StudentFiltersInput {
+    educationLevel: EducationLevel
+    status: Status
+    minProgress: Float
+    maxProgress: Float
+    riskLevel: RiskLevel
+  }
+
+  type StudentPerformanceListResponse {
+    students: [StudentPerformance!]!
+    total: Int!
+    hasMore: Boolean!
+  }
+
   type Query {
     # Auth
     me: User
@@ -522,6 +609,29 @@ const typeDefs = gql`
     
     # Activité
     recentActivity(limit: Int): [ActivityEvent!]!
+
+    # ========================================
+    # NOUVELLES QUERIES STUDENT ANALYTICS
+    # ========================================
+    # KPIs
+    studentAnalyticsKPIs(dateRange: DateRangeInput): StudentAnalyticsKPIs!
+
+    # Funnel de progression
+    studentProgressionFunnel: [ProgressionFunnelData!]!
+
+    # Heatmap d'engagement
+    studentEngagementHeatmap(dateRange: DateRangeInput): [EngagementHeatmapData!]!
+
+    # Liste détaillée des étudiants à risque
+    atRiskStudentsList(limit: Int, riskLevel: RiskLevel): [AtRiskStudentDetail!]!
+
+    # Tableau de performance de tous les étudiants
+    studentPerformanceList(
+      limit: Int
+      offset: Int
+      orderBy: String
+      filters: StudentFiltersInput
+    ): StudentPerformanceListResponse!
   }
 
   union ProfileUnion = Student | Teacher | Admin

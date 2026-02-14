@@ -35,6 +35,7 @@ const {
 } = require('../utils/email');
 
 const dashboardResolvers = require('./dashboardResolvers');
+const studentAnalyticsResolvers = require('./studentAnalyticsResolvers');
 
 const resolvers = {
   Query: {
@@ -436,6 +437,7 @@ const resolvers = {
     // DASHBOARD ANALYTICS
     // ========================================
     ...dashboardResolvers.Query,
+    ...studentAnalyticsResolvers.Query,
   },
 
   Mutation: {
